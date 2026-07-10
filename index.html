@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Archero Clone</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 600px;
+            max-height: 900px;
+            background-color: #2b3a26; /* Cenário gramado escuro */
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #384d32;
+        }
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+        .hp-bar-container {
+            width: 150px;
+            height: 20px;
+            background-color: #444;
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #hp-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #ff3333;
+            transition: width 0.1s ease;
+        }
+        #joystick-zone {
+            position: absolute;
+            bottom: 40px;
+            left: 0;
+            right: 0;
+            height: 220px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #joystick-base {
+            width: 120px;
+            height: 120px;
+            background-color: rgba(255, 255, 255, 0.15);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        #joystick-stick {
+            width: 50px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #screen-msg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            text-align: center;
+            padding: 20px;
+        }
+        #screen-msg h1 {
+            font-size: 36px;
+            color: #ffcc00;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        #screen-msg p {
+            font-size: 18px;
+            margin-bottom: 30px;
+            color: #ddd;
+        }
+        #start-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #000;
+            background-color: #ffcc00;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(255,204,0,0.4);
+            transition: transform 0.1s;
+        }
+        #start-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- HUD -->
+        <div id="hud">
+            <div>
+                <span>HP: </span>
+                <div class="hp-bar-container" style="display:inline-block; vertical-align:middle;">
+                    <div id="hp-bar"></div>
+                </div>
+            </div>
+            <div id="score-display">Inimigos: 0</div>
+        </div>
+
+        <!-- Canvas do Jogo -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Joystick Virtual para Celular -->
+        <div id="joystick-zone">
+            <div id="joystick-base">
+                <div id="joystick-stick"></div>
+            </div>
+        </div>
+
+        <!-- Telas de Início / Game Over -->
+        <div id="screen-msg">
+            <h1 id="msg-title">Archero Mini Clone</h1>
+            <p id="msg-desc">Use o analógico na tela para se mover de perto. Pare totalmente para atirar de flecha automaticamente!</p>
+            <button id="start-btn">JOGAR</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const hpBar = document.getElementById('hp-bar');
+        const scoreDisplay = document.getElementById('score-display');
+        const screenMsg = document.getElementById('screen-msg');
+        const msgTitle = document.getElementById('msg-title');
+        const msgDesc = document.getElementById('msg-desc');
+        const startBtn = document.getElementById('start-btn');
+
+        // Configuração de Tamanho Dinâmico
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Estados do Jogo
+        let gameActive = false;
+        let score = 0;
+        let lastTime = 0;
+        let enemySpawnTimer = 0;
+        let enemySpawnInterval = 2000; // 2 segundos inicial
+
+        // Entidades do jogo
+        let player = {
+            x: 0,
+            y: 0,
+            radius: 16,
+            speed: 4,
+            hp: 100,
+            maxHp: 100,
+            isMoving: false,
+            shootCooldown: 0,
+            shootInterval: 400 // milissegundos
+        };
+
+        let bullets = [];
+        let enemies = [];
+
+        // Controle por Toque / Joystick Virtual
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickStick = document.getElementById('joystick-stick');
+
+        let joystickActive = false;
+        let joystickStart = { x: 0, y: 0 };
+        let joystickMove = { x: 0, y: 0 };
+        let moveVector = { x: 0, y: 0 };
+
+        // Eventos de toque para o Joystick
+        joystickZone.addEventListener('touchstart', (e) => {
+            joystickActive = true;
+            const touch = e.touches[0];
+            const rect = joystickBase.getBoundingClientRect();
+            // Centraliza o início na posição atual do centro da base
+            joystickStart.x = rect.left + rect.width / 2;
+            joystickStart.y = rect.top + rect.height / 2;
+            handleJoystickMove(touch.clientX, touch.clientY);
+        });
+
+        joystickZone.addEventListener('touchmove', (e) => {
+            if (!joystickActive) return;
+            const touch = e.touches[0];
+            handleJoystickMove(touch.clientX, touch.clientY);
+        });
+
+        joystickZone.addEventListener('touchend', () => {
+            joystickActive = false;
+            joystickStick.style.transform = `translate(0px, 0px)`;
+            moveVector = { x: 0, y: 0 };
+            player.isMoving = false;
+        });
+
+        function handleJoystickMove(clientX, clientY) {
+            let dx = clientX - joystickStart.x;
+            let dy = clientY - joystickStart.y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            let maxRadius = 45; // limite visual do analógico
+
+            if (distance > maxRadius) {
+                dx = (dx / distance) * maxRadius;
+                dy = (dy / distance) * maxRadius;
+                distance = maxRadius;
+            }
+
+            joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
+
+            // Vetor normalizado para mover o herói
+            if (distance > 5) {
+                moveVector.x = dx / maxRadius;
+                moveVector.y = dy / maxRadius;
+                player.isMoving = true;
+            } else {
+                moveVector.x = 0;
+                moveVector.y = 0;
+                player.isMoving = false;
+            }
+        }
+
+        // Suporte opcional ao Teclado (para testes em PCs ou teclados externos)
+        let keys = {};
+        window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+        function updateKeyboardMovement() {
+            if (joystickActive) return; // Prioridade total ao toque se ativo
+
+            let dx = 0;
+            let dy = 0;
+
+            if (keys['w'] || keys['arrowup']) dy -= 1;
+            if (keys['s'] || keys['arrowdown']) dy += 1;
+            if (keys['a'] || keys['arrowleft']) dx -= 1;
+            if (keys['d'] || keys['arrowright']) dx += 1;
+
+            if (dx !== 0 || dy !== 0) {
+                // Normaliza vetor do teclado
+                let len = Math.sqrt(dx * dx + dy * dy);
+                moveVector.x = dx / len;
+                moveVector.y = dy / len;
+                player.isMoving = true;
+            } else {
+                moveVector.x = 0;
+                moveVector.y = 0;
+                player.isMoving = false;
+            }
+        }
+
+        // Inicializar ou Reiniciar
+        function initGame() {
+            score = 0;
+            enemySpawnInterval = 2000;
+            player.hp = player.maxHp;
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            player.isMoving = false;
+            bullets = [];
+            enemies = [];
+            scoreDisplay.innerText = `Inimigos: ${score}`;
+            hpBar.style.width = '100%';
+            screenMsg.style.display = 'none';
+            gameActive = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        startBtn.addEventListener('click', initGame);
+
+        function gameOver() {
+            gameActive = false;
+            msgTitle.innerText = "Fim de Jogo";
+            msgDesc.innerText = `Você derrotou ${score} inimigos!
+Quer tentar superar sua marca?`;
+            startBtn.innerText = "RECOMIÇAR";
+            screenMsg.style.display = 'flex';
+        }
+
+        // Criar Inimigos nas Bordas
+        function spawnEnemy() {
+            let edge = Math.floor(Math.random() * 4);
+            let x, y;
+            let radius = 14;
+
+            if (edge === 0) { // Topo
+                x = Math.random() * canvas.width;
+                y = -radius;
+            } else if (edge === 1) { // Direita
+                x = canvas.width + radius;
+                y = Math.random() * canvas.height;
+            } else if (edge === 2) { // Baixo
+                x = Math.random() * canvas.width;
+                y = canvas.height + radius;
+            } else { // Esquerda
+                x = -radius;
+                y = Math.random() * canvas.height;
+            }
+
+            // Dificuldade progressiva baseada no score
+            let speed = 1.2 + Math.min(score * 0.05, 1.5);
+            let hp = 1 + Math.floor(score / 10);
+
+            enemies.push({ x, y, radius, speed, hp });
+        }
+
+        // Encontrar inimigo mais próximo
+        function getClosestEnemy() {
+            let closest = null;
+            let minDist = Infinity;
+
+            for (let enemy of enemies) {
+                let dx = enemy.x - player.x;
+                let dy = enemy.y - player.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = enemy;
+                }
+            }
+            return closest;
+        }
+
+        // Loop Principal do Jogo
+        function gameLoop(currentTime) {
+            if (!gameActive) return;
+
+            let dt = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // 1. Atualizar Movimento e Teclado
+            updateKeyboardMovement();
+
+            if (player.isMoving) {
+                player.x += moveVector.x * player.speed;
+                player.y += moveVector.y * player.speed;
+
+                // Bloqueio das bordas da tela
+                if (player.x < player.radius) player.x = player.radius;
+                if (player.x > canvas.width - player.radius) player.x = canvas.width - player.radius;
+                if (player.y < player.radius) player.y = player.radius;
+                if (player.y > canvas.height - player.radius) player.y = canvas.height - player.radius;
+            }
+
+            // 2. Lógica de Ataque Automático (Parado)
+            if (!player.isMoving) {
+                player.shootCooldown -= dt;
+                if (player.shootCooldown <= 0) {
+                    let target = getClosestEnemy();
+                    if (target) {
+                        let dx = target.x - player.x;
+                        let dy = target.y - player.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Criar Projétil indo na direção exata do monstro
+                        bullets.push({
+                            x: player.x,
+                            y: player.y,
+                            vx: (dx / dist) * 7,
+                            vy: (dy / dist) * 7,
+                            radius: 5
+                        });
+                        player.shootCooldown = player.shootInterval;
+                    }
+                }
+            } else {
+                // Reseta cooldown parcialmente para não atirar instantaneamente ao parar
+                if (player.shootCooldown < 100) player.shootCooldown = 150;
+            }
+
+            // 3. Spawn de Inimigos
+            enemySpawnTimer += dt;
+            if (enemySpawnTimer >= enemySpawnInterval) {
+                spawnEnemy();
+                enemySpawnTimer = 0;
+                // Acelera levemente a velocidade com que novos monstros surgem
+                enemySpawnInterval = Math.max(600, 2000 - score * 30);
+            }
+
+            // 4. Mover Projéteis
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // Deletar projéteis fora da tela
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // 5. Mover e Colidir Inimigos
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+
+                // Seguir jogador
+                let edx = player.x - e.x;
+                let edy = player.y - e.y;
+                let edist = Math.sqrt(edx * edx + edy * edy);
+
+                e.x += (edx / edist) * e.speed;
+                e.y += (edy / edist) * e.speed;
+
+                // Colisão Monstro com Jogador
+                if (edist < player.radius + e.radius) {
+                    player.hp -= 20; // Toma dano
+                    hpBar.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+                    enemies.splice(i, 1); // some ao explodir no player
+
+                    if (player.hp <= 0) {
+                        gameOver();
+                        return;
+                    }
+                    continue;
+                }
+
+                // Colisão Flecha com Inimigo
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    let b = bullets[j];
+                    let bdx = e.x - b.x;
+                    let bdy = e.y - b.y;
+                    let bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+
+                    if (bdist < e.radius + b.radius) {
+                        e.hp -= 1;
+                        bullets.splice(j, 1); // remove flecha
+
+                        if (e.hp <= 0) {
+                            enemies.splice(i, 1); // mata monstro
+                            score++;
+                            scoreDisplay.innerText = `Inimigos: ${score}`;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // 6. Renderizar Tudo na Tela (Desenho)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Desenhar chão quadriculado sutil para dar noção de movimento
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            // Desenhar Projéteis (Flechas Amarelas com brilho)
+            ctx.fillStyle = '#ffcc00';
+            for (let b of bullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Desenhar Inimigos (Esferas Vermelhas de Combate)
+            for (let e of enemies) {
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Detalhe de núcleo escuro
+                ctx.fillStyle = '#990000';
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Desenhar Jogador (Arqueiro Azul com anel indicador de ataque)
+            if (!player.isMoving) {
+                // Anel indicador pulsante de carregamento de ataque rápido
+                ctx.strokeStyle = 'rgba(0, 150, 255, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius + 6, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#0099ff'; // Corpo principal azul
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Detalhe do visor do herói
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y - 2, player.radius * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+</body>
+</html>
