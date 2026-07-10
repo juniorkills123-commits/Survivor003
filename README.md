@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Archero Mobile - Fase 1</title>
+    <title>Archero Mobile - Personagens Visuais</title>
     <style>
         * {
             box-sizing: border-box;
@@ -170,8 +170,14 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // Configurações e variáveis do jogo
-        let player = { x: 0, y: 0, radius: 16, speed: 3.5, hp: 100, maxHp: 100, isMoving: false, shootCooldown: 0, shootInterval: 350 };
+        // Carregar as Imagens dos Personagens
+        const playerImg = new Image();
+        playerImg.src = 'https://img.icons8.com/isometric/512/archer.png'; // Arqueiro
+
+        const enemyImg = new Image();
+        enemyImg.src = 'https://img.icons8.com/isometric/512/demon.png'; // Monstro/Demônio
+
+        let player = { x: 0, y: 0, radius: 20, speed: 3.5, hp: 100, maxHp: 100, isMoving: false, shootCooldown: 0, shootInterval: 350 };
         let enemies = [];
         let bullets = [];
         let score = 0;
@@ -180,7 +186,7 @@
         let spawnTimer = 0;
         let spawnInterval = 1500;
 
-        // Joystick Virtual
+        // Joystick
         const joyContainer = document.getElementById('joystick-container');
         const joyBase = document.getElementById('joystick-base');
         const joyStick = document.getElementById('joystick-stick');
@@ -227,9 +233,7 @@
                 moveVec.y = dy / maxRadius;
                 player.isMoving = true;
             } else {
-                moveVec.x = 0;
-                moveVec.y = 0;
-                player.isMoving = false;
+                moveVec.x = 0; moveVec.y = 0; player.isMoving = false;
             }
         }
 
@@ -241,7 +245,7 @@
             else if (edge === 2) { x = Math.random() * canvas.width; y = canvas.height + 20; }
             else { x = -20; y = Math.random() * canvas.height; }
 
-            enemies.push({ x: x, y: y, radius: 12, speed: 1.2 + Math.min(score * 0.03, 1.5), hp: 1 });
+            enemies.push({ x: x, y: y, radius: 18, speed: 1.2 + Math.min(score * 0.03, 1.5) });
         }
 
         function resetGame() {
@@ -266,14 +270,12 @@
             let dt = now - lastTime;
             lastTime = now;
 
-            // 1. Movimentação do Jogador
             if (player.isMoving) {
                 player.x += moveVec.x * player.speed;
                 player.y += moveVec.y * player.speed;
                 player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
                 player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
             } else {
-                // 2. Ataque Automático (Apenas se estiver PARADO)
                 player.shootCooldown -= dt;
                 if (player.shootCooldown <= 0 && enemies.length > 0) {
                     let closest = null, minDist = Infinity;
@@ -294,7 +296,6 @@
                 }
             }
 
-            // Spawner de inimigos
             spawnTimer += dt;
             if (spawnTimer >= spawnInterval) {
                 spawnEnemy();
@@ -302,7 +303,6 @@
                 spawnInterval = Math.max(600, 1500 - score * 20);
             }
 
-            // Atualizar Projéteis
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx; b.y += b.vy;
@@ -311,17 +311,14 @@
                 }
             }
 
-            // Atualizar Inimigos e Colisões
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
                 let dx = player.x - e.x, dy = player.y - e.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
 
-                // IA: Seguir jogador
                 e.x += (dx / dist) * e.speed;
                 e.y += (dy / dist) * e.speed;
 
-                // Colisão Inimigo com Jogador
                 if (dist < player.radius + e.radius) {
                     player.hp -= 20;
                     hpBar.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
@@ -335,7 +332,6 @@
                     continue;
                 }
 
-                // Colisão Bala com Inimigo
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     let b = bullets[j];
                     let bDist = Math.sqrt((e.x - b.x)**2 + (e.y - b.y)**2);
@@ -349,32 +345,36 @@
                 }
             }
 
-            // Renderização Gráfica
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Chão da Masmorra
-            ctx.fillStyle = '#22331f';
+            // Fundo do cenário (Textura simulada)
+            ctx.fillStyle = '#243820';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Detalhes do chão para parecer masmorra antiga
+            ctx.fillStyle = '#1d2e1a';
+            for(let i=0; i<canvas.width; i+=40) {
+                ctx.fillRect(i, 0, 2, canvas.height);
+                ctx.fillRect(0, i, canvas.width, 2);
+            }
 
-            // Desenhar Projéteis
+            // Desenhar Projéteis (Flechas Amarelas)
             ctx.fillStyle = '#ffcc00';
             bullets.forEach(b => {
                 ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2); ctx.fill();
             });
 
-            // Desenhar Inimigos (Monstros Vermelhos)
-            ctx.fillStyle = '#e74c3c';
+            // Desenhar Inimigos (Imagem do Minion/Demônio)
             enemies.forEach(e => {
-                ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2); ctx.fill();
+                ctx.drawImage(enemyImg, e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2);
             });
 
-            // Desenhar Jogador (Arqueiro Azul)
-            ctx.fillStyle = '#3498db';
-            ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2); ctx.fill();
+            // Desenhar Jogador (Imagem do Arqueiro Real)
+            ctx.drawImage(playerImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
 
-            // Anel indicador de mira se estiver parado
+            // Círculo de mira sutil abaixo do herói quando parado
             if (!player.isMoving) {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(player.x, player.y, player.radius + 6, 0, Math.PI*2); ctx.stroke();
             }
@@ -382,7 +382,13 @@
             requestAnimationFrame(loop);
         }
 
-        // Início automático
+        // Garante que o jogo roda mesmo esperando as imagens carregarem
+        playerImg.onload = enemyImg.onload = () => {
+            if(gameActive && enemies.length === 0 && bullets.length === 0 && score === 0) {
+                resetGame();
+            }
+        };
+        
         resetGame();
     </script>
 </body>
